@@ -2,6 +2,8 @@
 
 Paylane is a bounded payment-collection agent for real communities and merchants on Celo.
 
+**Live app:** https://nftkingiii.github.io/paylane/
+
 It turns a concrete collection request into a locked payment link, settles USA₮ on Celo mainnet, and refuses self-payments, expired requests, or mutations to the approved recipient and amount.
 
 ## Working slice
