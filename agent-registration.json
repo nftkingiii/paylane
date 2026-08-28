@@ -1,0 +1,15 @@
+{
+  "type": "Agent",
+  "name": "Paylane",
+  "description": "A bounded payment-collection agent for real communities and merchants on Celo. It prepares reviewable collection mandates, reconciles stablecoin payments, and rejects payments outside approved recipient, amount, and deadline constraints.",
+  "endpoints": [
+    {
+      "type": "wallet",
+      "address": "0x8aAB2E27bd9Ce18Ca44722CCE48ADCc10df0C4c4",
+      "chainId": 42220
+    }
+  ],
+  "supportedTrust": [
+    "reputation"
+  ]
+}

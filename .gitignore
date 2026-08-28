@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+PROJECT_STATE.md
+HACK_EVENT_GATE.json
+
