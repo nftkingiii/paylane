@@ -3,6 +3,8 @@
 !.env.example
 *.pem
 *.key
+node_modules/
+dist/
+*.tsbuildinfo
 PROJECT_STATE.md
 HACK_EVENT_GATE.json
-
