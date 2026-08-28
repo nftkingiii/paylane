@@ -21,6 +21,7 @@ import {
 
 type Tab = "create" | "request" | "proof";
 type PaymentState = "idle" | "connecting" | "review" | "pending" | "confirmed" | "failed" | "rejected";
+const homePath = import.meta.env.BASE_URL;
 
 const initialDeadline = (() => {
   const value = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000);
@@ -55,7 +56,7 @@ function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Paylane home">
+        <a className="brand" href={homePath} aria-label="Paylane home">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Paylane</span>
         </a>
@@ -201,7 +202,7 @@ function PaymentDesk({ request, error }: { request: CollectionRequest | null; er
   }, [request]);
 
   if (error || !request) {
-    return <section className="empty-state"><div className="status-icon danger">×</div><h1>Request unavailable</h1><p>{error ?? "No collection request was supplied."}</p><a href="/">Create a new request</a></section>;
+    return <section className="empty-state"><div className="status-icon danger">×</div><h1>Request unavailable</h1><p>{error ?? "No collection request was supplied."}</p><a href={homePath}>Create a new request</a></section>;
   }
 
   const expired = isExpired(request);
@@ -247,7 +248,7 @@ function PaymentDesk({ request, error }: { request: CollectionRequest | null; er
   return (
     <section className="payment-layout">
       <div className="request-summary">
-        <a className="back-link" href="/">← Create another lane</a>
+        <a className="back-link" href={homePath}>← Create another lane</a>
         <span className="request-type">{collectionKindLabels[request.kind]}</span>
         <h1>{request.title}</h1>
         <p>{request.note || `A payment request from ${request.organizer}.`}</p>
