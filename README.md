@@ -57,7 +57,7 @@ npm run bot:start
 
 ### VTpass sandbox airtime and data
 
-The `/buy` command is deliberately locked to `https://sandbox.vtpass.com/api`. It supports MTN, Airtel, Glo, and 9mobile airtime/data simulations, loads current data variations from VTpass, requires an explicit confirmation, and labels every result as a sandbox simulation. It does not collect crypto or deliver real services yet.
+The airtime/data integration is retained but hidden by default with `PAYLANE_BILL_BUY_ENABLED=false`. When deliberately enabled, `/buy` is locked to `https://sandbox.vtpass.com/api` unless the separate live gate is also approved. It supports MTN, Airtel, Glo, and 9mobile airtime/data simulations, loads current data variations from VTpass, requires an explicit confirmation, and labels every sandbox result as a simulation.
 
 Add the four `VTPASS_*` values shown in `.env.example` to `.env.local` and the Railway service variables. In the VTpass sandbox dashboard, enable/whitelist the airtime and data products before testing; VTpass response code `028` means the product is not enabled for the account.
 

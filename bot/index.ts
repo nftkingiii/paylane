@@ -21,6 +21,7 @@ type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_da
 const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const expectedUsername = process.env.TELEGRAM_BOT_USERNAME?.trim() || "PaylaneCeloBot";
 const appUrl = process.env.PAYLANE_APP_URL?.trim() || "https://nftkingiii.github.io/paylane/";
+const billBuyEnabled = process.env.PAYLANE_BILL_BUY_ENABLED === "true";
 const liveBuyEnabled = process.env.PAYLANE_LIVE_BUY_ENABLED === "true";
 const liveRecipient = process.env.PAYLANE_TREASURY_ADDRESS?.trim();
 const ngnPerUsat = Number(process.env.PAYLANE_NGN_PER_USAT ?? "0");
@@ -100,6 +101,7 @@ async function begin(chatId: number): Promise<void> {
 }
 
 async function beginBuy(chatId: number): Promise<void> {
+  if (!billBuyEnabled) return void await send(chatId, "Airtime and data purchases are currently disabled.");
   sessions.delete(chatId);
   setBuySession(chatId, "service", {});
   await send(chatId, liveBuyEnabled ? "What would you like to buy with USA₮ on Celo?" : "Sandbox test: what would you like to buy? No real airtime or data will be delivered.", keyboard([
@@ -236,9 +238,9 @@ async function handleMessage(message: Message): Promise<void> {
   if (text === "/start" || text.startsWith("/start@")) {
     sessions.delete(chatId);
     buySessions.delete(chatId);
-    return void await send(chatId, "Paylane creates locked USA₮ collection links on Celo and tests Nigerian airtime/data fulfillment. I never ask for private keys. Send /collect, /buy, /cancel, or /help.");
+    return void await send(chatId, billBuyEnabled ? "Paylane creates locked USA₮ collection links on Celo and supports Nigerian airtime/data orders. I never ask for private keys. Send /collect, /buy, /cancel, or /help." : "Paylane creates locked USA₮ collection links on Celo. I never ask for private keys. Send /collect, /cancel, or /help.");
   }
-  if (text === "/help" || text.startsWith("/help@")) return void await send(chatId, liveBuyEnabled ? "Use /buy to create an airtime/data order, pay the exact tagged USA₮ request on Celo, then submit its transaction with /settle. Never pay twice for the same order." : "Use /collect for a locked Celo payment request. Use /buy to simulate an airtime/data order in the VTpass sandbox. Sandbox orders do not collect crypto and do not deliver real services. Drafts expire after 30 minutes.");
+  if (text === "/help" || text.startsWith("/help@")) return void await send(chatId, !billBuyEnabled ? "Use /collect and answer seven short prompts to create a locked Celo payment request. Drafts expire after 30 minutes." : liveBuyEnabled ? "Use /buy to create an airtime/data order, pay the exact tagged USA₮ request on Celo, then submit its transaction with /settle. Never pay twice for the same order." : "Use /collect for a locked Celo payment request. Use /buy to simulate an airtime/data order in the VTpass sandbox. Sandbox orders do not collect crypto and do not deliver real services. Drafts expire after 30 minutes.");
   if (text === "/cancel" || text.startsWith("/cancel@")) {
     sessions.delete(chatId);
     buySessions.delete(chatId);
@@ -322,8 +324,8 @@ async function run(): Promise<void> {
   }
   await api("setMyCommands", { commands: [
     { command: "collect", description: "Create a locked USA₮ request" },
-    { command: "buy", description: "Test airtime or data in the sandbox" },
-    ...(liveBuyEnabled ? [{ command: "settle", description: "Verify payment and fulfill an order" }] : []),
+    ...(billBuyEnabled ? [{ command: "buy", description: liveBuyEnabled ? "Buy airtime or data with USA₮" : "Test airtime or data in the sandbox" }] : []),
+    ...(billBuyEnabled && liveBuyEnabled ? [{ command: "settle", description: "Verify payment and fulfill an order" }] : []),
     { command: "cancel", description: "Discard the current draft" },
     { command: "help", description: "How Paylane works" },
   ] });
