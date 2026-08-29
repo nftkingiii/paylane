@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+.git
+.github
+dist
+node_modules
+PROJECT_STATE.md
+HACK_EVENT_GATE.json
