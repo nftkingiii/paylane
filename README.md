@@ -41,6 +41,22 @@ npm run build
 npm run preview
 ```
 
+## Telegram bot
+
+The Telegram interface at [@PaylaneCeloBot](https://t.me/PaylaneCeloBot) guides a collector through the same locked-request schema and returns a live Paylane payment link. Drafts are held only in memory for 30 minutes; the bot stores no wallet keys and never signs payments.
+
+Set the BotFather token only in the process environment, then start the long-polling worker:
+
+```powershell
+$secureToken = Read-Host "Paste the BotFather token" -AsSecureString
+$env:TELEGRAM_BOT_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
+$env:TELEGRAM_BOT_USERNAME = "PaylaneCeloBot"
+$env:PAYLANE_APP_URL = "https://nftkingiii.github.io/paylane/"
+npm run bot:start
+```
+
+Use `/collect` in a private chat. The worker must remain running; GitHub Pages hosts the web app but cannot run the Telegram process.
+
 ## Verified project identity
 
 - Repository: https://github.com/nftkingiii/paylane
