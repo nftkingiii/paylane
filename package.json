@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "bot:check": "tsc -p tsconfig.bot.json",
-    "bot:start": "node --experimental-strip-types bot/index.ts",
+    "bot:start": "node --disable-warning=ExperimentalWarning --experimental-strip-types bot/index.ts",
     "test": "vitest run --pool=threads --maxWorkers=1 --no-file-parallelism",
     "preview": "vite preview"
   },

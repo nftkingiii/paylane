@@ -14,4 +14,4 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY bot ./bot
 COPY src/lib ./src/lib
 USER node
-CMD ["node", "--experimental-strip-types", "bot/index.ts"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "--experimental-strip-types", "bot/index.ts"]

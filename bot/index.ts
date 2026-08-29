@@ -4,6 +4,8 @@ import { randomBytes } from "node:crypto";
 import { getAddress, type Hash } from "viem";
 import type { OrderStore as OrderStoreType } from "./orders.ts";
 import { verifyTaggedPayment } from "./payment.ts";
+import { ShortLinkStore } from "./shortlinks.ts";
+import { startServer } from "./server.ts";
 
 type Step = "kind" | "title" | "organizer" | "recipient" | "amount" | "deadline" | "note";
 type Session = { step: Step; draft: Draft; touchedAt: number };
@@ -21,12 +23,15 @@ type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_da
 const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const expectedUsername = process.env.TELEGRAM_BOT_USERNAME?.trim() || "PaylaneCeloBot";
 const appUrl = process.env.PAYLANE_APP_URL?.trim() || "https://nftkingiii.github.io/paylane/";
+const shortBaseUrl = process.env.PAYLANE_SHORT_BASE_URL?.replace(/\/$/, "");
+const databasePath = process.env.PAYLANE_DB_PATH?.trim() || "/tmp/paylane.sqlite";
+const shortLinks = new ShortLinkStore(databasePath);
 const billBuyEnabled = process.env.PAYLANE_BILL_BUY_ENABLED === "true";
 const liveBuyEnabled = process.env.PAYLANE_LIVE_BUY_ENABLED === "true";
 const liveRecipient = process.env.PAYLANE_TREASURY_ADDRESS?.trim();
 const ngnPerUsat = Number(process.env.PAYLANE_NGN_PER_USAT ?? "0");
 const orderStore: OrderStoreType | undefined = liveBuyEnabled
-  ? new (await import("./orders.ts")).OrderStore(process.env.PAYLANE_DB_PATH?.trim() || "/data/paylane.sqlite")
+  ? new (await import("./orders.ts")).OrderStore(databasePath)
   : undefined;
 if (liveBuyEnabled && (!liveRecipient || !Number.isFinite(ngnPerUsat) || ngnPerUsat <= 0)) {
   throw new Error("Live buying requires PAYLANE_TREASURY_ADDRESS and PAYLANE_NGN_PER_USAT.");
@@ -308,8 +313,9 @@ async function handleMessage(message: Message): Promise<void> {
       const note = text === "/skip" ? "" : cleanText(text, 240);
       const request = buildRequest({ ...session.draft, note });
       const url = buildPaylaneUrl(request, appUrl);
+      const paymentUrl = shortBaseUrl ? `${shortBaseUrl}/p/${shortLinks.create(url, request.deadline)}` : url;
       sessions.delete(chatId);
-      return void await send(chatId, `Your locked Paylane request is ready:\n\n${url}\n\nShare this link with payers. Payment is not complete until a payer signs and the transaction confirms on Celo.`);
+      return void await send(chatId, `Your locked Paylane request is ready:\n\n${paymentUrl}\n\nShare this link with payers. Payment is not complete until a payer signs and the transaction confirms on Celo.`);
     }
     await send(chatId, "Use the buttons in the latest prompt, or send /cancel.");
   } catch (error) {
@@ -346,4 +352,5 @@ async function run(): Promise<void> {
   }
 }
 
+startServer(shortLinks);
 await run();

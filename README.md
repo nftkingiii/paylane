@@ -55,6 +55,10 @@ $env:PAYLANE_APP_URL = "https://nftkingiii.github.io/paylane/"
 npm run bot:start
 ```
 
+### Short payment links
+
+The Railway worker also serves durable redirect links such as `https://paylane-bot-production.up.railway.app/p/AB23CD45`. `/collect` stores the existing locked request URL in SQLite on the mounted `/data` volume and returns only the eight-character public code. Codes exclude ambiguous characters, are not sequential, inherit the payment request deadline, and resolve with a no-cache 302 redirect. Invalid and expired codes return 404. The redirect service exposes `/healthz` for release verification and accepts no public write requests.
+
 ### VTpass sandbox airtime and data
 
 The airtime/data integration is retained but hidden by default with `PAYLANE_BILL_BUY_ENABLED=false`. When deliberately enabled, `/buy` is locked to `https://sandbox.vtpass.com/api` unless the separate live gate is also approved. It supports MTN, Airtel, Glo, and 9mobile airtime/data simulations, loads current data variations from VTpass, requires an explicit confirmation, and labels every sandbox result as a simulation.
