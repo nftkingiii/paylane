@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "bot:check": "tsc -p tsconfig.bot.json",
     "bot:start": "node --experimental-strip-types bot/index.ts",
-    "test": "vitest run",
+    "test": "vitest run --pool=threads --maxWorkers=1 --no-file-parallelism",
     "preview": "vite preview"
   },
   "dependencies": {

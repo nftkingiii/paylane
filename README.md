@@ -55,6 +55,14 @@ $env:PAYLANE_APP_URL = "https://nftkingiii.github.io/paylane/"
 npm run bot:start
 ```
 
+### VTpass sandbox airtime and data
+
+The `/buy` command is deliberately locked to `https://sandbox.vtpass.com/api`. It supports MTN, Airtel, Glo, and 9mobile airtime/data simulations, loads current data variations from VTpass, requires an explicit confirmation, and labels every result as a sandbox simulation. It does not collect crypto or deliver real services yet.
+
+Add the four `VTPASS_*` values shown in `.env.example` to `.env.local` and the Railway service variables. In the VTpass sandbox dashboard, enable/whitelist the airtime and data products before testing; VTpass response code `028` means the product is not enabled for the account.
+
+Use `08011111111` for VTpass's documented successful sandbox scenario. Other documented numbers exercise pending, timeout, no-response, and unexpected-response paths. Never switch `VTPASS_BASE_URL` to live without a separate production review, durable order storage, verified Celo settlement gating, and explicit approval.
+
 Use `/collect` in a private chat. The worker must remain running; GitHub Pages hosts the web app but cannot run the Telegram process.
 
 ## Verified project identity
