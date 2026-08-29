@@ -9,12 +9,14 @@ import {
   isExpired,
   type CollectionKind,
   type CollectionRequest,
+  type CollectionToken,
 } from "./lib/collection";
 import {
   ATTRIBUTION_TAG,
   CELO_EXPLORER,
   connectWallet,
   sendCollectionPayment,
+  TOKEN_LABELS,
   type ConnectedWallet,
   type PaymentResult,
 } from "./lib/celo";
@@ -80,7 +82,7 @@ function App() {
 
       <footer>
         <span>Paylane · ERC-8004 Agent #9790</span>
-        <span>Direct USA₮ settlement · x402 facilitator pending</span>
+        <span>Direct USDT / USA₮ settlement · x402 facilitator pending</span>
       </footer>
     </div>
   );
@@ -95,6 +97,7 @@ function CreateCollection() {
     amount: "",
     deadline: initialDeadline,
     note: "",
+    token: "USDT" as CollectionToken,
   });
   const [shareUrl, setShareUrl] = useState("");
   const [requestId, setRequestId] = useState("");
@@ -118,7 +121,7 @@ function CreateCollection() {
         organizer: form.organizer,
         recipient: getAddress(form.recipient),
         amount: form.amount,
-        token: "USAT",
+        token: form.token,
         deadline: new Date(form.deadline).toISOString(),
         note: form.note,
         createdAt: new Date().toISOString(),
@@ -141,7 +144,7 @@ function CreateCollection() {
       <div className="intro-column">
         <div className="title-lockup">
           <h1>Open a lane for<br />real payments.</h1>
-          <p>Create one bounded USA₮ request. The recipient, amount, and deadline are locked into the share link before anyone connects a wallet.</p>
+          <p>Create one bounded Celo stablecoin request. The recipient, amount, token, and deadline are locked into the share link before anyone connects a wallet.</p>
         </div>
 
         <div className="lane-list" aria-label="Collection templates">
@@ -170,7 +173,8 @@ function CreateCollection() {
           <label>Organizer or merchant<input required minLength={2} maxLength={50} value={form.organizer} onChange={(event) => update("organizer", event.target.value)} placeholder="Celo Nigeria" /></label>
           <label>Recipient wallet<input required spellCheck={false} autoComplete="off" value={form.recipient} onChange={(event) => update("recipient", event.target.value)} placeholder="0x…" /></label>
           <div className="field-row">
-            <label>Amount per payer<div className="amount-input"><input required inputMode="decimal" value={form.amount} onChange={(event) => update("amount", event.target.value)} placeholder="1.00" /><span>USA₮</span></div></label>
+          <label>Amount per payer<div className="amount-input"><input required inputMode="decimal" value={form.amount} onChange={(event) => update("amount", event.target.value)} placeholder="1.00" /><span>{TOKEN_LABELS[form.token]}</span></div></label>
+          <label>Payment token<select value={form.token} onChange={(event) => { const token = event.target.value as CollectionToken; setForm((current) => ({ ...current, token })); setShareUrl(""); }}><option value="USDT">USDT · recommended</option><option value="USAT">USA₮ · hackathon rail</option></select></label>
             <label>Closes at<input required type="datetime-local" value={form.deadline} onChange={(event) => update("deadline", event.target.value)} /></label>
           </div>
           <label>What the payment covers<textarea maxLength={240} value={form.note} onChange={(event) => update("note", event.target.value)} placeholder="Describe the real good, service, or contribution purpose." /></label>
@@ -211,7 +215,7 @@ function PaymentDesk({ request, error }: { request: CollectionRequest | null; er
     setState("connecting");
     setMessage("");
     try {
-      const connected = await connectWallet();
+      const connected = await connectWallet(request!.token);
       setWallet(connected);
       if (connected.address.toLowerCase() === request!.recipient.toLowerCase()) {
         setState("rejected");
@@ -235,7 +239,7 @@ function PaymentDesk({ request, error }: { request: CollectionRequest | null; er
     setState("pending");
     setMessage("Confirm the exact USA₮ transfer in your wallet.");
     try {
-      const payment = await sendCollectionPayment(wallet, request!.recipient, request!.amount);
+      const payment = await sendCollectionPayment(wallet, request!.recipient, request!.amount, request!.token);
       setResult(payment);
       setState("confirmed");
       setMessage(payment.attributionVerified ? "Payment confirmed and attribution verified." : "Payment confirmed, but attribution could not be verified yet.");
@@ -261,14 +265,14 @@ function PaymentDesk({ request, error }: { request: CollectionRequest | null; er
       </div>
 
       <div className="payment-ticket">
-        <div className="ticket-topline"><span>Payment authorization</span><span>USA₮ · Celo</span></div>
-        <div className="ticket-amount"><span>Amount due</span><strong>{request.amount}<small> USA₮</small></strong></div>
+        <div className="ticket-topline"><span>Payment authorization</span><span>{TOKEN_LABELS[request.token]} · Celo</span></div>
+        <div className="ticket-amount"><span>Amount due</span><strong>{request.amount}<small> {TOKEN_LABELS[request.token]}</small></strong></div>
         <div className="ticket-route">
           <div><span>From</span><strong>{wallet ? shortAddress(wallet.address) : "Connect payer"}</strong></div>
           <div className="route-line"><i /><span>locked route</span><i /></div>
           <div><span>To</span><strong>{shortAddress(request.recipient)}</strong></div>
         </div>
-        {wallet && <div className="balance-row"><span>Wallet balance</span><strong>{wallet.formattedBalance} USA₮</strong></div>}
+        {wallet && <div className="balance-row"><span>Wallet balance</span><strong>{wallet.formattedBalance} {TOKEN_LABELS[wallet.token]}</strong></div>}
 
         {expired ? (
           <div className="decision-box rejected"><span>Rejected</span><p>The deadline has passed. Paylane will not open a wallet request.</p></div>

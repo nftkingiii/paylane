@@ -18,7 +18,11 @@ import { celo } from "viem/chains";
 export const CELO_CHAIN_ID = 42_220;
 export const ATTRIBUTION_TAG = "celo_003382274302";
 export const USAT_ADDRESS = getAddress("0xD2ab3C9A02DBBAB236BfEC45D1d755DF4267F771");
+export const USDT_ADDRESS = getAddress("0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e");
 export const USAT_DECIMALS = 6;
+export type PaymentToken = "USDT" | "USAT";
+export const TOKEN_LABELS: Record<PaymentToken, string> = { USDT: "USDT", USAT: "USA₮" };
+export function tokenAddress(token: PaymentToken): Address { return token === "USAT" ? USAT_ADDRESS : USDT_ADDRESS; }
 export const CELO_EXPLORER = "https://celoscan.io";
 
 const erc20Abi = [
@@ -50,6 +54,7 @@ export type ConnectedWallet = {
   address: Address;
   balance: bigint;
   formattedBalance: string;
+  token: PaymentToken;
 };
 
 export type PaymentResult = {
@@ -91,19 +96,19 @@ async function ensureCeloNetwork(): Promise<void> {
   }
 }
 
-export async function connectWallet(): Promise<ConnectedWallet> {
+export async function connectWallet(token: PaymentToken = "USDT"): Promise<ConnectedWallet> {
   if (!window.ethereum) throw new Error("Install or open an EVM wallet that supports Celo.");
   await ensureCeloNetwork();
   const walletClient = createWalletClient({ chain: celo, transport: custom(window.ethereum) });
   const [address] = await walletClient.requestAddresses();
   if (!address) throw new Error("The wallet did not expose an account.");
   const balance = await celoPublicClient.readContract({
-    address: USAT_ADDRESS,
+    address: tokenAddress(token),
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [address],
   });
-  return { address, balance, formattedBalance: formatUnits(balance, USAT_DECIMALS) };
+  return { address, balance, formattedBalance: formatUnits(balance, USAT_DECIMALS), token };
 }
 
 export function buildTaggedTransferData(recipient: Address, amount: bigint): Hex {
@@ -123,6 +128,7 @@ export async function sendCollectionPayment(
   connected: ConnectedWallet,
   recipientInput: string,
   amountInput: string,
+  token: PaymentToken = connected.token,
 ): Promise<PaymentResult> {
   if (!window.ethereum) throw new Error("The connected wallet is no longer available.");
   await ensureCeloNetwork();
@@ -133,12 +139,12 @@ export async function sendCollectionPayment(
 
   const amount = parseUnits(amountInput, USAT_DECIMALS);
   const latestBalance = await celoPublicClient.readContract({
-    address: USAT_ADDRESS,
+    address: tokenAddress(token),
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [connected.address],
   });
-  if (latestBalance < amount) throw new Error("This wallet does not have enough USA₮ for the request.");
+  if (latestBalance < amount) throw new Error(`This wallet does not have enough ${TOKEN_LABELS[token]}.`);
 
   const data = buildTaggedTransferData(recipient, amount);
   await celoPublicClient.call({ account: connected.address, to: USAT_ADDRESS, data });
@@ -147,7 +153,7 @@ export async function sendCollectionPayment(
   const hash = await walletClient.sendTransaction({
     account: connected.address,
     chain: celo,
-    to: USAT_ADDRESS,
+    to: tokenAddress(token),
     data,
     value: 0n,
   });

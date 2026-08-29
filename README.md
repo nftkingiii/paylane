@@ -4,14 +4,14 @@ Paylane is a bounded payment-collection agent for real communities and merchants
 
 **Live app:** https://nftkingiii.github.io/paylane/
 
-It turns a concrete collection request into a locked payment link, settles USA₮ on Celo mainnet, and refuses self-payments, expired requests, or mutations to the approved recipient and amount.
+It turns a concrete collection request into a locked payment link, settles a selected Celo stablecoin on mainnet, and refuses self-payments, expired requests, or mutations to the approved recipient and amount.
 
 ## Working slice
 
 - Three request templates: event collection, merchant request, and contribution circle
 - Shareable, URL-encoded requests with schema and size validation
 - Browser-wallet connection with Celo mainnet enforcement
-- Direct USA₮ transfer to the locked recipient
+- Direct USDT or USA₮ transfer to the locked recipient (USDT is the default for new requests; USA₮ remains available for the hackathon rail)
 - ERC-8021 transaction attribution using `celo_003382274302`
 - Preflight simulation, confirmed-receipt success state, and Celoscan receipt link
 - Public proof surface for ERC-8004 Agent #9790 and the current integration status
@@ -89,7 +89,8 @@ Use `/collect` in a private chat. The worker must remain running; GitHub Pages h
 - Repository: https://github.com/nftkingiii/paylane
 - ERC-8004 Agent: https://8004scan.io/agents/celo/9790
 - Agent wallet: `0x8aAB2E27bd9Ce18Ca44722CCE48ADCc10df0C4c4`
-- USA₮ contract: `0xD2ab3C9A02DBBAB236BfEC45D1d755DF4267F771`
+- Celo USDT contract: `0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e`
+- Celo USA₮ contract: `0xD2ab3C9A02DBBAB236BfEC45D1d755DF4267F771`
 
 ## Open integration gap
 

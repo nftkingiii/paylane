@@ -9,6 +9,9 @@ export const collectionKindLabels: Record<CollectionKind, string> = {
   circle: "Contribution circle",
 };
 
+export const collectionTokens = ["USDT", "USAT"] as const;
+export type CollectionToken = (typeof collectionTokens)[number];
+
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const amountPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
 
@@ -19,7 +22,7 @@ export const collectionRequestSchema = z.object({
   organizer: z.string().trim().min(2).max(50),
   recipient: z.string().regex(addressPattern),
   amount: z.string().regex(amountPattern).refine((value) => Number(value) > 0 && Number(value) <= 100_000),
-  token: z.literal("USAT"),
+  token: z.enum(collectionTokens),
   deadline: z.string().datetime(),
   note: z.string().trim().max(240),
   createdAt: z.string().datetime(),

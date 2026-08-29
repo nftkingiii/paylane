@@ -4,9 +4,10 @@ import {
   createShareUrl,
   type CollectionKind,
   type CollectionRequest,
+  type CollectionToken,
 } from "../src/lib/collection.ts";
 
-export type Draft = Partial<Omit<CollectionRequest, "version" | "token" | "createdAt">>;
+export type Draft = Partial<Omit<CollectionRequest, "version" | "token" | "createdAt">> & { token?: CollectionToken };
 
 export function cleanText(value: string, max: number): string {
   const cleaned = value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
@@ -44,7 +45,7 @@ export function buildRequest(draft: Draft, now = new Date()): CollectionRequest 
     organizer: draft.organizer,
     recipient: draft.recipient,
     amount: draft.amount,
-    token: "USAT",
+    token: draft.token ?? "USDT",
     deadline: draft.deadline,
     note: draft.note ?? "",
     createdAt: now.toISOString(),
