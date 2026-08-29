@@ -50,7 +50,9 @@ export function vtpassConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Confi
     secretKey: env.VTPASS_SECRET_KEY?.trim() ?? "",
   };
   if (!config.baseUrl || !config.apiKey || !config.publicKey || !config.secretKey) throw new Error("VTpass configuration is incomplete.");
-  if (config.baseUrl !== "https://sandbox.vtpass.com/api") throw new Error("Paylane /buy is locked to the VTpass sandbox until live mode is explicitly approved.");
+  const sandbox = config.baseUrl === "https://sandbox.vtpass.com/api";
+  const approvedLive = config.baseUrl === "https://vtpass.com/api" && env.PAYLANE_LIVE_BUY_ENABLED === "true";
+  if (!sandbox && !approvedLive) throw new Error("VTpass live mode requires PAYLANE_LIVE_BUY_ENABLED=true and the exact live API URL.");
   return config;
 }
 

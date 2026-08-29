@@ -15,6 +15,7 @@ describe("VTpass purchase boundary", () => {
   });
 
   it("fails closed when live mode is configured", () => {
-    expect(() => vtpassConfigFromEnv({ VTPASS_BASE_URL: "https://vtpass.com/api", VTPASS_API_KEY: "a", VTPASS_PUBLIC_KEY: "PK_a", VTPASS_SECRET_KEY: "SK_a" })).toThrow(/locked to the VTpass sandbox/);
+    expect(() => vtpassConfigFromEnv({ VTPASS_BASE_URL: "https://vtpass.com/api", VTPASS_API_KEY: "a", VTPASS_PUBLIC_KEY: "PK_a", VTPASS_SECRET_KEY: "SK_a" })).toThrow(/PAYLANE_LIVE_BUY_ENABLED/);
+    expect(() => vtpassConfigFromEnv({ VTPASS_BASE_URL: "https://vtpass.com/api", VTPASS_API_KEY: "a", VTPASS_PUBLIC_KEY: "PK_a", VTPASS_SECRET_KEY: "SK_a", PAYLANE_LIVE_BUY_ENABLED: "true" })).not.toThrow();
   });
 });

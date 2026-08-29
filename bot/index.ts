@@ -1,5 +1,9 @@
 import { buildPaylaneUrl, buildRequest, cleanText, deadlineFromDays, isCollectionKind, normalizeAmount, normalizeRecipient, type Draft } from "./domain.ts";
 import { getDataPlans, normalizeAirtimeAmount, normalizeNigerianPhone, purchase, vtpassConfigFromEnv, type DataPlan, type Network, type ServiceKind } from "./vtpass.ts";
+import { randomBytes } from "node:crypto";
+import { getAddress, type Hash } from "viem";
+import { OrderStore } from "./orders.ts";
+import { verifyTaggedPayment } from "./payment.ts";
 
 type Step = "kind" | "title" | "organizer" | "recipient" | "amount" | "deadline" | "note";
 type Session = { step: Step; draft: Draft; touchedAt: number };
@@ -17,6 +21,13 @@ type InlineKeyboard = { inline_keyboard: Array<Array<{ text: string; callback_da
 const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const expectedUsername = process.env.TELEGRAM_BOT_USERNAME?.trim() || "PaylaneCeloBot";
 const appUrl = process.env.PAYLANE_APP_URL?.trim() || "https://nftkingiii.github.io/paylane/";
+const liveBuyEnabled = process.env.PAYLANE_LIVE_BUY_ENABLED === "true";
+const liveRecipient = process.env.PAYLANE_TREASURY_ADDRESS?.trim();
+const ngnPerUsat = Number(process.env.PAYLANE_NGN_PER_USAT ?? "0");
+const orderStore = liveBuyEnabled ? new OrderStore(process.env.PAYLANE_DB_PATH?.trim() || "/data/paylane.sqlite") : undefined;
+if (liveBuyEnabled && (!liveRecipient || !Number.isFinite(ngnPerUsat) || ngnPerUsat <= 0)) {
+  throw new Error("Live buying requires PAYLANE_TREASURY_ADDRESS and PAYLANE_NGN_PER_USAT.");
+}
 if (!token || !/^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(token)) {
   throw new Error("TELEGRAM_BOT_TOKEN is missing or malformed.");
 }
@@ -89,7 +100,7 @@ async function begin(chatId: number): Promise<void> {
 async function beginBuy(chatId: number): Promise<void> {
   sessions.delete(chatId);
   setBuySession(chatId, "service", {});
-  await send(chatId, "Sandbox test: what would you like to buy? No real airtime or data will be delivered.", keyboard([
+  await send(chatId, liveBuyEnabled ? "What would you like to buy with USA₮ on Celo?" : "Sandbox test: what would you like to buy? No real airtime or data will be delivered.", keyboard([
     [["Airtime", "buykind:airtime"], ["Mobile data", "buykind:data"]],
   ]));
 }
@@ -105,6 +116,51 @@ function summary(draft: BuyDraft): string {
   const service = draft.kind === "airtime" ? "Airtime" : "Mobile data";
   const item = draft.kind === "airtime" ? `N${draft.amount?.toLocaleString("en-NG")}` : `${draft.planName} (N${draft.amount?.toLocaleString("en-NG")})`;
   return `${service}\nNetwork: ${draft.network?.toUpperCase()}\nPhone: ${draft.phone}\nProduct: ${item}`;
+}
+
+function quoteUsat(naira: number): string {
+  if (!Number.isFinite(ngnPerUsat) || ngnPerUsat <= 0) throw new Error("The live exchange rate is unavailable.");
+  return (Math.ceil((naira / ngnPerUsat) * 1_000_000) / 1_000_000).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+async function createLiveOrder(chatId: number, draft: BuyDraft): Promise<void> {
+  if (!orderStore || !liveRecipient || !draft.kind || !draft.network || !draft.phone || !draft.amount) throw new Error("Live buying is not configured.");
+  const recipient = getAddress(liveRecipient);
+  const orderId = `PL_${randomBytes(5).toString("hex").toUpperCase()}`;
+  const usatAmount = quoteUsat(draft.amount);
+  orderStore.create({ id: orderId, chatId, kind: draft.kind, network: draft.network, phone: draft.phone, nairaAmount: draft.amount, variationCode: draft.variationCode, planName: draft.planName, usatAmount, recipient, status: "awaiting_payment" });
+  const request = buildRequest({
+    kind: "merchant", title: `${draft.network.toUpperCase()} ${draft.kind}`, organizer: "Paylane",
+    recipient, amount: usatAmount, deadline: new Date(Date.now() + 15 * 60_000).toISOString(), note: `Paylane order ${orderId}`,
+  });
+  const url = buildPaylaneUrl(request, appUrl);
+  buySessions.delete(chatId);
+  await send(chatId, `Order ${orderId} is awaiting payment.\n\nPay exactly ${usatAmount} USA₮ on Celo using this locked, tagged request:\n${url}\n\nAfter confirmation, send:\n/settle ${orderId} 0xYOUR_TRANSACTION_HASH\n\nPayment alone is not proof of delivery. Paylane verifies it before vending.`);
+}
+
+async function settleLiveOrder(chatId: number, orderId: string, hash: string): Promise<void> {
+  if (!liveBuyEnabled || !orderStore) throw new Error("Live buying is not enabled.");
+  if (!/^PL_[A-F0-9]{10}$/.test(orderId) || !/^0x[a-fA-F0-9]{64}$/.test(hash)) throw new Error("Use /settle ORDER_ID 0xTRANSACTION_HASH.");
+  const order = orderStore.get(orderId);
+  if (!order || order.chatId !== chatId) throw new Error("That order was not found in this Telegram chat.");
+  if (order.status === "delivered") return void await send(chatId, `Order ${order.id} was already delivered. VTpass transaction: ${order.vtpassTransactionId ?? "recorded"}.`);
+  if (order.status !== "awaiting_payment") throw new Error(`Order ${order.id} is currently ${order.status}.`);
+  const verified = await verifyTaggedPayment(hash as Hash, { recipient: getAddress(order.recipient), amount: order.usatAmount });
+  if (!orderStore.markPaid(order.id, hash.toLowerCase(), verified.payer)) throw new Error("This order is no longer awaiting payment.");
+  const requestId = (await import("./vtpass.ts")).makeRequestId();
+  orderStore.setVtpassRequest(order.id, requestId);
+  try {
+    const result = await purchase(vtpassConfigFromEnv(), { kind: order.kind, network: order.network, phone: order.phone, amount: order.nairaAmount, variationCode: order.variationCode, requestId });
+    if (result.code === "000" && result.status === "delivered") {
+      orderStore.markDelivered(order.id, result.transactionId);
+      return void await send(chatId, `Delivered.\nOrder: ${order.id}\nCelo payment: ${hash}\nVTpass transaction: ${result.transactionId ?? "confirmed"}`);
+    }
+    orderStore.markFulfillmentFailed(order.id);
+    return void await send(chatId, `Payment verified, but fulfillment is ${result.status} (${result.code}). Do not pay again. Order: ${order.id}`);
+  } catch {
+    orderStore.markFulfillmentFailed(order.id);
+    return void await send(chatId, `Payment verified, but VTpass fulfillment failed. Do not pay again. Order: ${order.id}`);
+  }
 }
 
 async function handleCallback(query: CallbackQuery): Promise<void> {
@@ -127,13 +183,18 @@ async function handleCallback(query: CallbackQuery): Promise<void> {
       if (!plan) return void await send(chatId, "That plan is no longer available. Send /buy to restart.");
       const draft = { ...buySession.draft, amount: plan.amount, variationCode: plan.code, planName: plan.name, plans: undefined };
       setBuySession(chatId, "confirm", draft);
-      return void await send(chatId, `Review this SANDBOX order:\n\n${summary(draft)}\n\nNo crypto payment has been collected. Confirm only to simulate fulfillment.`, keyboard([[['Confirm sandbox purchase', 'confirm:yes'], ['Cancel', 'confirm:no']]]));
+      const review = liveBuyEnabled ? `Review this order:\n\n${summary(draft)}\n\nConfirmation creates a locked USA₮ payment request; it does not charge you automatically.` : `Review this SANDBOX order:\n\n${summary(draft)}\n\nNo crypto payment has been collected. Confirm only to simulate fulfillment.`;
+      return void await send(chatId, review, keyboard([[[liveBuyEnabled ? 'Create payment request' : 'Confirm sandbox purchase', 'confirm:yes'], ['Cancel', 'confirm:no']]]));
     }
     if (buySession.step === "confirm" && action === "confirm" && value === "no") {
       buySessions.delete(chatId);
       return void await send(chatId, "Sandbox order cancelled. Nothing was purchased.");
     }
     if (buySession.step === "confirm" && action === "confirm" && value === "yes") {
+      if (liveBuyEnabled) {
+        try { return void await createLiveOrder(chatId, buySession.draft); }
+        catch { buySessions.delete(chatId); return void await send(chatId, "The live order could not be created. No payment request was issued."); }
+      }
       setBuySession(chatId, "processing", buySession.draft);
       await send(chatId, "Submitting the sandbox order to VTpass...");
       try {
@@ -175,7 +236,7 @@ async function handleMessage(message: Message): Promise<void> {
     buySessions.delete(chatId);
     return void await send(chatId, "Paylane creates locked USA₮ collection links on Celo and tests Nigerian airtime/data fulfillment. I never ask for private keys. Send /collect, /buy, /cancel, or /help.");
   }
-  if (text === "/help" || text.startsWith("/help@")) return void await send(chatId, "Use /collect for a locked Celo payment request. Use /buy to simulate an airtime/data order in the VTpass sandbox. Sandbox orders do not collect crypto and do not deliver real services. Drafts expire after 30 minutes.");
+  if (text === "/help" || text.startsWith("/help@")) return void await send(chatId, liveBuyEnabled ? "Use /buy to create an airtime/data order, pay the exact tagged USA₮ request on Celo, then submit its transaction with /settle. Never pay twice for the same order." : "Use /collect for a locked Celo payment request. Use /buy to simulate an airtime/data order in the VTpass sandbox. Sandbox orders do not collect crypto and do not deliver real services. Drafts expire after 30 minutes.");
   if (text === "/cancel" || text.startsWith("/cancel@")) {
     sessions.delete(chatId);
     buySessions.delete(chatId);
@@ -183,6 +244,11 @@ async function handleMessage(message: Message): Promise<void> {
   }
   if (text === "/collect" || text.startsWith("/collect@")) return void await begin(chatId);
   if (text === "/buy" || text.startsWith("/buy@")) return void await beginBuy(chatId);
+  if (text.startsWith("/settle ") || text.startsWith("/settle@")) {
+    const parts = text.replace(/^\/settle(?:@\w+)?\s+/, "").split(/\s+/);
+    try { return void await settleLiveOrder(chatId, parts[0] ?? "", parts[1] ?? ""); }
+    catch (error) { return void await send(chatId, error instanceof Error ? error.message : "The payment could not be verified."); }
+  }
 
   const buySession = buySessions.get(chatId);
   if (buySession) {
@@ -203,7 +269,8 @@ async function handleMessage(message: Message): Promise<void> {
       if (buySession.step === "amount") {
         const draft = { ...buySession.draft, amount: normalizeAirtimeAmount(text) };
         setBuySession(chatId, "confirm", draft);
-        return void await send(chatId, `Review this SANDBOX order:\n\n${summary(draft)}\n\nNo crypto payment has been collected. Confirm only to simulate fulfillment.`, keyboard([[['Confirm sandbox purchase', 'confirm:yes'], ['Cancel', 'confirm:no']]]));
+        const review = liveBuyEnabled ? `Review this order:\n\n${summary(draft)}\n\nConfirmation creates a locked USA₮ payment request; it does not charge you automatically.` : `Review this SANDBOX order:\n\n${summary(draft)}\n\nNo crypto payment has been collected. Confirm only to simulate fulfillment.`;
+        return void await send(chatId, review, keyboard([[[liveBuyEnabled ? 'Create payment request' : 'Confirm sandbox purchase', 'confirm:yes'], ['Cancel', 'confirm:no']]]));
       }
       return void await send(chatId, "Use the buttons in the latest prompt, or send /cancel.");
     } catch (error) {
@@ -254,6 +321,7 @@ async function run(): Promise<void> {
   await api("setMyCommands", { commands: [
     { command: "collect", description: "Create a locked USA₮ request" },
     { command: "buy", description: "Test airtime or data in the sandbox" },
+    ...(liveBuyEnabled ? [{ command: "settle", description: "Verify payment and fulfill an order" }] : []),
     { command: "cancel", description: "Discard the current draft" },
     { command: "help", description: "How Paylane works" },
   ] });

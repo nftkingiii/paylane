@@ -63,6 +63,21 @@ Add the four `VTPASS_*` values shown in `.env.example` to `.env.local` and the R
 
 Use `08011111111` for VTpass's documented successful sandbox scenario. Other documented numbers exercise pending, timeout, no-response, and unexpected-response paths. Never switch `VTPASS_BASE_URL` to live without a separate production review, durable order storage, verified Celo settlement gating, and explicit approval.
 
+### Live purchase safety gate
+
+The live path is implemented but disabled by default. When deliberately activated, `/buy` persists the order in SQLite, creates a locked USA₮ request carrying Paylane's attribution tag, and requires `/settle ORDER_ID TX_HASH`. Before vending, the worker reads the Celo mainnet transaction and verifies all of the following: successful receipt, one additional confirmation, official USA₮ contract, exact treasury recipient, exact amount, independent sender, and `celo_003382274302` attribution. A unique database constraint prevents one transaction hash from fulfilling two orders.
+
+Production activation requires all of these together:
+
+- VTpass live API provisioning and funded live NGN balance.
+- `VTPASS_BASE_URL=https://vtpass.com/api` with live keys.
+- A persistent Railway volume mounted at `/data`.
+- A registered Paylane pay-to wallet in `PAYLANE_TREASURY_ADDRESS`.
+- A reviewed `PAYLANE_NGN_PER_USAT` quote and expiry policy.
+- `PAYLANE_LIVE_BUY_ENABLED=true` only after an end-to-end low-value canary.
+
+Do not enable the flag with sandbox credentials: real Celo payments must never trigger simulated fulfillment.
+
 Use `/collect` in a private chat. The worker must remain running; GitHub Pages hosts the web app but cannot run the Telegram process.
 
 ## Verified project identity
