@@ -2,7 +2,7 @@ import { buildPaylaneUrl, buildRequest, cleanText, deadlineFromDays, isCollectio
 import { getDataPlans, normalizeAirtimeAmount, normalizeNigerianPhone, purchase, vtpassConfigFromEnv, type DataPlan, type Network, type ServiceKind } from "./vtpass.ts";
 import { randomBytes } from "node:crypto";
 import { getAddress, type Hash } from "viem";
-import { OrderStore } from "./orders.ts";
+import type { OrderStore as OrderStoreType } from "./orders.ts";
 import { verifyTaggedPayment } from "./payment.ts";
 
 type Step = "kind" | "title" | "organizer" | "recipient" | "amount" | "deadline" | "note";
@@ -24,7 +24,9 @@ const appUrl = process.env.PAYLANE_APP_URL?.trim() || "https://nftkingiii.github
 const liveBuyEnabled = process.env.PAYLANE_LIVE_BUY_ENABLED === "true";
 const liveRecipient = process.env.PAYLANE_TREASURY_ADDRESS?.trim();
 const ngnPerUsat = Number(process.env.PAYLANE_NGN_PER_USAT ?? "0");
-const orderStore = liveBuyEnabled ? new OrderStore(process.env.PAYLANE_DB_PATH?.trim() || "/data/paylane.sqlite") : undefined;
+const orderStore: OrderStoreType | undefined = liveBuyEnabled
+  ? new (await import("./orders.ts")).OrderStore(process.env.PAYLANE_DB_PATH?.trim() || "/data/paylane.sqlite")
+  : undefined;
 if (liveBuyEnabled && (!liveRecipient || !Number.isFinite(ngnPerUsat) || ngnPerUsat <= 0)) {
   throw new Error("Live buying requires PAYLANE_TREASURY_ADDRESS and PAYLANE_NGN_PER_USAT.");
 }
